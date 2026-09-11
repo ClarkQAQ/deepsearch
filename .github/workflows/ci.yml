@@ -32,6 +32,9 @@ jobs:
         shell: bash
         run: test -z "$(gofmt -l .)"
 
+      - name: Verify license
+        run: test -s LICENSE
+
       - name: Verify .env.example is up to date
         run: go generate ./... && git diff --exit-code -- .env.example
 

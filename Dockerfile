@@ -34,6 +34,9 @@ LABEL org.opencontainers.image.title="deepsearch" \
 COPY --from=build /out/deepsearch /usr/local/bin/deepsearch
 COPY --chmod=755 scripts/healthcheck.sh /usr/local/bin/healthcheck
 
+RUN mkdir -p /usr/share/doc/deepsearch
+COPY --chmod=644 LICENSE /usr/share/doc/deepsearch/LICENSE
+
 USER deepsearch
 
 EXPOSE 8231

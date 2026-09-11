@@ -175,3 +175,7 @@ HTTP 服务由 `internal/provider/http.go` 统一构建（`echo.NewWithConfig` +
 ## 安全
 
 `WebFetch`（含 `/v1/fetch`）只允许公开域名与公网地址：字面 IP、`localhost`、内网、CGNAT、链路本地、多播、保留与基准测试网段全部拒绝，重定向每一跳都重新校验，并在 DNS 解析后、真正拨号前再校验一次对端地址，避免 DNS rebinding。
+
+## 许可
+
+基于 MIT 协议发布，完整文本见 [LICENSE](LICENSE)。

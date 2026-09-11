@@ -175,3 +175,7 @@ The echo server is built once in `internal/provider/http.go` (`echo.NewWithConfi
 ## Security
 
 `WebFetch` (including `/v1/fetch`) only accepts public domain names and public addresses: literal IP addresses, `localhost`, private, CGNAT, link-local, multicast, reserved and benchmark ranges are all refused, every redirect hop is re-validated, and the resolved peer address is checked again right before the socket is dialed to defeat DNS rebinding.
+
+## License
+
+Released under the MIT License. See [LICENSE](LICENSE) for the full text.
