@@ -3,7 +3,7 @@ name: deepsearch
 services:
   deepsearch:
     build: .
-    image: ${DEEPSEARCH_IMAGE:-deepsearch:local}
+    image: ${DEEPSEARCH_IMAGE:-ghcr.io/clarkqaq/deepsearch:latest}
     init: true
     restart: unless-stopped
     ports:
