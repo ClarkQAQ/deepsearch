@@ -6,17 +6,6 @@ DeepSearch 把 DeepSeek 模型与 Anthropic API 的 Server Tool Use `web_search`
 
 模型走任意 Anthropic 兼容端点，`web_search` 由服务端执行，片段不够用时再由本地 `WebFetch` 读取单个公开网页正文。
 
-## 能力
-
-| 接口 | 说明 |
-| --- | --- |
-| `POST /v1/search` | 同步搜索，返回答案、来源、用量、耗时 |
-| `POST /v1/fetch` | 读取单个公开网页，返回标题、正文、外链 |
-| `GET /healthz` | 健康检查，始终免鉴权 |
-| `POST /mcp` | MCP Streamable HTTP，暴露 `web_search` 工具 |
-
-只有同步接口，没有流式与异步任务。
-
 ## 快速开始
 
 ```bash
@@ -27,31 +16,29 @@ go run . server -d .env  # 默认监听 0.0.0.0:8231
 
 不传子命令时同样进入 `server`。`MODEL_BASE_URL` 必须是兼容 Anthropic Messages API 且支持服务端 `web_search` 工具的端点，`MODEL` 是它背后的模型 ID，例如 `deepseek-flash`。
 
-## 配置
+## 容器
 
-完整列表见 [.env.example](.env.example)，由 `go generate ./...` 从 `pkg/env.Env` 生成。
+```bash
+docker run -d --name deepsearch -p 8231:8231 -v "$PWD/.env:/app/.env:ro" ghcr.io/clarkqaq/deepsearch:latest
+```
 
-| 变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `MODEL_API_KEY` | 空 | 模型 API Key，必填 |
-| `MODEL_BASE_URL` | 空 | 模型 API 基地址 |
-| `MODEL` | 空 | 模型 ID，必填，例如 `deepseek-flash` |
-| `MODEL_OUTPUT_LIMIT` | 空 | 单次答案的最大输出 token |
-| `WEB_SEARCH_MAX_USES` | `10` | 单次请求内 `web_search` 服务端工具的最大调用次数 |
-| `WEB_FETCH_ENABLED` | `true` | 是否启用 `WebFetch`（同时决定 `/v1/fetch` 是否可用） |
-| `WEB_FETCH_TIMEOUT` | `15s` | 单次抓取超时（含 DNS、拨号、重定向与读取） |
-| `WEB_FETCH_MAX_BYTES` | `2097152` | 单页最多读取的字节数 |
-| `WEB_FETCH_MAX_CHARS` | `20000` | 返回给模型的最大字符数 |
-| `HTTP_ADDR` | `0.0.0.0:8231` | REST 与 MCP 的监听地址 |
-| `AUTH_TOKEN` | 空 | 可选 Bearer Token，REST 与 MCP 共用；配置后除 `/healthz` 外都要求 `Authorization: Bearer <token>` |
-| `MAX_HEADER_BYTES` | `2097152` | HTTP 请求头最大字节数 |
-| `MAX_MULTIPART_MEMORY` | `67108864` | 解析 multipart 表单时允许占用的最大内存，超出后落盘 |
-| `READ_TIMEOUT` | `120s` | 读取完整请求（含 body）的最长耗时 |
-| `WRITE_TIMEOUT` | `300s` | 写响应的最长耗时；必须覆盖一次完整搜索 |
-| `IDLE_TIMEOUT` | `30s` | 空闲连接保持时长 |
-| `STD_LOG_LEVEL` | `info` | 控制台日志级别 |
+或用 Compose（会挂载 `.env` 并继承镜像的健康检查）：
 
-读取 `.env` 时变量不带前缀；直接使用系统环境变量时需要 `APP_` 前缀（例如 `APP_MODEL_API_KEY`）。
+```bash
+docker compose pull && docker compose up -d
+```
+
+每次 `v*` tag 会把 `linux/amd64` 镜像发布到 `ghcr.io/clarkqaq/deepsearch`，标签为 `<version>`、`<major>.<minor>` 与 `latest`；新建的 GHCR 包默认私有，需要匿名拉取时在仓库设置里改成 public。
+
+镜像以非 root 用户 `deepsearch` 运行，健康检查轮询 `/healthz`。配置来自挂载到 `/app/.env` 的 `.env` 文件，用 `APP_` 前缀的环境变量同样可以。监听端口取自配置里的 `HTTP_ADDR`，因此 `DEEPSEARCH_PORT` 要与它一致 —— 例如 `.env` 写的是 `HTTP_ADDR=0.0.0.0:8232` 时用 `DEEPSEARCH_PORT=8232 docker compose up -d`。从源码构建镜像的方式见 [AGENTS.md](AGENTS.md)。
+
+## 构建与测试
+
+```bash
+go build ./...
+go vet ./...
+go test -race ./...
+```
 
 ## REST 用法
 
@@ -108,6 +95,43 @@ curl -s http://127.0.0.1:8231/v1/fetch \
 | 502 | `search_failed` / `fetch_failed` | 搜索失败、页面读取失败 |
 | 500 | `internal` | 其它内部错误 |
 
+## 能力
+
+| 接口 | 说明 |
+| --- | --- |
+| `POST /v1/search` | 同步搜索，返回答案、来源、用量、耗时 |
+| `POST /v1/fetch` | 读取单个公开网页，返回标题、正文、外链 |
+| `GET /healthz` | 健康检查，始终免鉴权 |
+| `POST /mcp` | MCP Streamable HTTP，暴露 `web_search` 工具 |
+
+只有同步接口，没有流式与异步任务。
+
+## 配置
+
+完整列表见 [.env.example](.env.example)，由 `go generate ./...` 从 `pkg/env.Env` 生成。
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `MODEL_API_KEY` | 空 | 模型 API Key，必填 |
+| `MODEL_BASE_URL` | 空 | 模型 API 基地址 |
+| `MODEL` | 空 | 模型 ID，必填，例如 `deepseek-flash` |
+| `MODEL_OUTPUT_LIMIT` | 空 | 单次答案的最大输出 token |
+| `WEB_SEARCH_MAX_USES` | `10` | 单次请求内 `web_search` 服务端工具的最大调用次数 |
+| `WEB_FETCH_ENABLED` | `true` | 是否启用 `WebFetch`（同时决定 `/v1/fetch` 是否可用） |
+| `WEB_FETCH_TIMEOUT` | `15s` | 单次抓取超时（含 DNS、拨号、重定向与读取） |
+| `WEB_FETCH_MAX_BYTES` | `2097152` | 单页最多读取的字节数 |
+| `WEB_FETCH_MAX_CHARS` | `20000` | 返回给模型的最大字符数 |
+| `HTTP_ADDR` | `0.0.0.0:8231` | REST 与 MCP 的监听地址 |
+| `AUTH_TOKEN` | 空 | 可选 Bearer Token，REST 与 MCP 共用；配置后除 `/healthz` 外都要求 `Authorization: Bearer <token>` |
+| `MAX_HEADER_BYTES` | `2097152` | HTTP 请求头最大字节数 |
+| `MAX_MULTIPART_MEMORY` | `67108864` | 解析 multipart 表单时允许占用的最大内存，超出后落盘 |
+| `READ_TIMEOUT` | `120s` | 读取完整请求（含 body）的最长耗时 |
+| `WRITE_TIMEOUT` | `300s` | 写响应的最长耗时；必须覆盖一次完整搜索 |
+| `IDLE_TIMEOUT` | `30s` | 空闲连接保持时长 |
+| `STD_LOG_LEVEL` | `info` | 控制台日志级别 |
+
+读取 `.env` 时变量不带前缀；直接使用系统环境变量时需要 `APP_` 前缀（例如 `APP_MODEL_API_KEY`）。
+
 ## MCP 接入
 
 MCP 只暴露一个工具 `web_search`，入参 `{"query": "..."}`，返回值与 `/v1/search` 同构（同时作为结构化输出返回）。
@@ -125,37 +149,6 @@ MCP 只暴露一个工具 `web_search`，入参 `{"query": "..."}`，返回值�
 ```
 
 未配置 `AUTH_TOKEN` 时可省略 `headers`。
-
-## 构建与测试
-
-```bash
-go build ./...
-go vet ./...
-go test -race ./...
-```
-
-## 容器
-
-```bash
-docker build --build-arg BUILD_VERSION="$(git describe --tags --always)" -t deepsearch:local .
-docker run --rm -p 8231:8231 -v "$PWD/.env:/app/.env:ro" deepsearch:local
-```
-
-Compose 会挂载 `.env` 并继承镜像的健康检查：
-
-```bash
-docker compose up -d
-```
-
-镜像以非 root 用户 `deepsearch` 运行，健康检查轮询 `/healthz`。配置来自挂载到 `/app/.env` 的 `.env` 文件，用 `APP_` 前缀的环境变量同样可以。监听端口取自配置里的 `HTTP_ADDR`，因此 `DEEPSEARCH_PORT` 要与它一致 —— 例如 `.env` 写的是 `HTTP_ADDR=0.0.0.0:8232` 时用 `DEEPSEARCH_PORT=8232 docker compose up -d`。
-
-打 tag（`v*`）时会把 `linux/amd64` 镜像发布到 GitHub Container Registry，即 `ghcr.io/<owner>/deepsearch`，标签为 `<version>`、`<major>.<minor>` 与 `latest`：
-
-```bash
-docker run --rm -p 8231:8231 -v "$PWD/.env:/app/.env:ro" ghcr.io/<owner>/deepsearch:latest
-```
-
-新建的 GHCR 包默认私有，需要匿名拉取时在仓库设置里改成 public。
 
 ## 架构
 

@@ -18,10 +18,14 @@ go build ./... && go vet ./... && go test ./...
 go generate ./...
 
 # Build the image from source (multi-stage)
-docker build -t deepsearch:local .
+docker build --build-arg BUILD_VERSION="$(git describe --tags --always)" \
+  -t ghcr.io/clarkqaq/deepsearch:local .
 
-# Run the stack with Compose (mounts ./.env at /app/.env)
-docker compose up -d
+# Run the published image with Compose (mounts ./.env at /app/.env)
+docker compose pull && docker compose up -d
+
+# Run a local build with Compose instead
+DEEPSEARCH_IMAGE=ghcr.io/clarkqaq/deepsearch:local docker compose up -d --build
 ```
 
 Never consider work complete until `go build ./...` and `go vet ./...` pass cleanly.
@@ -32,7 +36,7 @@ The `Dockerfile` builds from source in two stages: `golang:1.27-alpine` compiles
 
 `BUILD_VERSION` / `BUILD_COMMIT` / `BUILD_DATE` are the image build args; `BUILD_VERSION` is injected as `-X deepsearch/pkg/util.version`, which `util.BuildVersion()` prefers over the VCS revision. Keep `.dockerignore` in sync when adding files: `.env` must never enter the build context, and `*.md` must never be excluded globally because `pkg/agentutil/prompt/*.md` is embedded with `go:embed`.
 
-Two workflows live in `.github/workflows`: `ci.yml` runs gofmt, the `.env.example` drift check (`go generate` + `git diff`), `go mod verify`, build, vet and `go test -race`, plus a build-only container job; `container.yml` publishes `linux/amd64` images to `ghcr.io/${GITHUB_REPOSITORY,,}` on `v*` tags with semver/`latest` tags, provenance and SBOM. Image names must stay lowercase, and neither workflow needs repository secrets.
+Two workflows live in `.github/workflows`: `ci.yml` runs gofmt, the `.env.example` drift check (`go generate` + `git diff`), `go mod verify`, build, vet and `go test -race`, plus a build-only container job; `container.yml` publishes `linux/amd64` images to `ghcr.io/${GITHUB_REPOSITORY,,}` (resolved: `ghcr.io/clarkqaq/deepsearch`) on `v*` tags with semver/`latest` tags, provenance and SBOM, and tags manual runs as `edge`. Image names must stay lowercase, and neither workflow needs repository secrets.
 
 ## High-Level Architecture
 

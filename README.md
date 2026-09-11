@@ -6,17 +6,6 @@ DeepSearch wraps a DeepSeek model and Anthropic's Server Tool Use `web_search` i
 
 The model runs through any Anthropic-compatible endpoint, the `web_search` tool executes server-side at the provider, and `WebFetch` reads individual public pages locally when a snippet is not enough.
 
-## Capabilities
-
-| Endpoint | Description |
-| --- | --- |
-| `POST /v1/search` | One synchronous search: answer, sources, token usage, duration |
-| `POST /v1/fetch` | Read one public web page: title, text, outgoing links |
-| `GET /healthz` | Health check, always unauthenticated |
-| `POST /mcp` | MCP Streamable HTTP, exposing the `web_search` tool |
-
-Synchronous only: no streaming responses and no background jobs.
-
 ## Quick Start
 
 ```bash
@@ -27,31 +16,29 @@ go run . server -d .env  # listens on 0.0.0.0:8231 by default
 
 Running without a subcommand enters `server` as well. `MODEL_BASE_URL` must speak the Anthropic Messages API and support the server-side `web_search` tool; `MODEL` is the model ID behind it, for example `deepseek-flash`.
 
-## Configuration
+## Container
 
-The full list lives in [.env.example](.env.example), generated from `pkg/env.Env` by `go generate ./...`.
+```bash
+docker run -d --name deepsearch -p 8231:8231 -v "$PWD/.env:/app/.env:ro" ghcr.io/clarkqaq/deepsearch:latest
+```
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `MODEL_API_KEY` | empty | Model API key, required |
-| `MODEL_BASE_URL` | empty | Model API base URL |
-| `MODEL` | empty | Model ID, required, for example `deepseek-flash` |
-| `MODEL_OUTPUT_LIMIT` | empty | Maximum output tokens of one answer |
-| `WEB_SEARCH_MAX_USES` | `10` | Maximum `web_search` server-tool calls within one request |
-| `WEB_FETCH_ENABLED` | `true` | Enables `WebFetch`, which also gates `POST /v1/fetch` |
-| `WEB_FETCH_TIMEOUT` | `15s` | Timeout of one fetch, including DNS, dialing, redirects and body read |
-| `WEB_FETCH_MAX_BYTES` | `2097152` | Maximum bytes read from one page |
-| `WEB_FETCH_MAX_CHARS` | `20000` | Maximum characters returned to the model |
-| `HTTP_ADDR` | `0.0.0.0:8231` | Listen address of the REST API and the MCP endpoint |
-| `AUTH_TOKEN` | empty | Optional bearer token shared by REST and MCP; when set, every request except `/healthz` needs `Authorization: Bearer <token>` |
-| `MAX_HEADER_BYTES` | `2097152` | Maximum size of HTTP request headers |
-| `MAX_MULTIPART_MEMORY` | `67108864` | Maximum memory for parsing multipart forms before spilling to disk |
-| `READ_TIMEOUT` | `120s` | Maximum duration for reading a whole request, including its body |
-| `WRITE_TIMEOUT` | `300s` | Maximum duration before timing out response writes; it must cover a whole search |
-| `IDLE_TIMEOUT` | `30s` | How long idle connections are kept open |
-| `STD_LOG_LEVEL` | `info` | Console log level |
+Or with Compose, which mounts `.env` and inherits the image health check:
 
-Variables in a `.env` file carry no prefix; when they come from the process environment they need the `APP_` prefix, for example `APP_MODEL_API_KEY`.
+```bash
+docker compose pull && docker compose up -d
+```
+
+Every `v*` tag publishes `linux/amd64` images to `ghcr.io/clarkqaq/deepsearch`, tagged `<version>`, `<major>.<minor>` and `latest`; a new GHCR package starts private, so make it public in the repository settings when anonymous pulls are wanted.
+
+The image runs as the unprivileged `deepsearch` user and polls `/healthz`. Configuration is a `.env` file mounted at `/app/.env`, and `APP_`-prefixed variables work just as well. The listen port comes from `HTTP_ADDR` in that config, so keep `DEEPSEARCH_PORT` in sync with it — for a `.env` that sets `HTTP_ADDR=0.0.0.0:8232` use `DEEPSEARCH_PORT=8232 docker compose up -d`. Building the image from source is documented in [AGENTS.md](AGENTS.md).
+
+## Build and Test
+
+```bash
+go build ./...
+go vet ./...
+go test -race ./...
+```
 
 ## REST API
 
@@ -108,6 +95,43 @@ Errors always come back in the same envelope:
 | 502 | `search_failed` / `fetch_failed` | Search failed, or the page could not be read |
 | 500 | `internal` | Any other internal failure |
 
+## Capabilities
+
+| Endpoint | Description |
+| --- | --- |
+| `POST /v1/search` | One synchronous search: answer, sources, token usage, duration |
+| `POST /v1/fetch` | Read one public web page: title, text, outgoing links |
+| `GET /healthz` | Health check, always unauthenticated |
+| `POST /mcp` | MCP Streamable HTTP, exposing the `web_search` tool |
+
+Synchronous only: no streaming responses and no background jobs.
+
+## Configuration
+
+The full list lives in [.env.example](.env.example), generated from `pkg/env.Env` by `go generate ./...`.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `MODEL_API_KEY` | empty | Model API key, required |
+| `MODEL_BASE_URL` | empty | Model API base URL |
+| `MODEL` | empty | Model ID, required, for example `deepseek-flash` |
+| `MODEL_OUTPUT_LIMIT` | empty | Maximum output tokens of one answer |
+| `WEB_SEARCH_MAX_USES` | `10` | Maximum `web_search` server-tool calls within one request |
+| `WEB_FETCH_ENABLED` | `true` | Enables `WebFetch`, which also gates `POST /v1/fetch` |
+| `WEB_FETCH_TIMEOUT` | `15s` | Timeout of one fetch, including DNS, dialing, redirects and body read |
+| `WEB_FETCH_MAX_BYTES` | `2097152` | Maximum bytes read from one page |
+| `WEB_FETCH_MAX_CHARS` | `20000` | Maximum characters returned to the model |
+| `HTTP_ADDR` | `0.0.0.0:8231` | Listen address of the REST API and the MCP endpoint |
+| `AUTH_TOKEN` | empty | Optional bearer token shared by REST and MCP; when set, every request except `/healthz` needs `Authorization: Bearer <token>` |
+| `MAX_HEADER_BYTES` | `2097152` | Maximum size of HTTP request headers |
+| `MAX_MULTIPART_MEMORY` | `67108864` | Maximum memory for parsing multipart forms before spilling to disk |
+| `READ_TIMEOUT` | `120s` | Maximum duration for reading a whole request, including its body |
+| `WRITE_TIMEOUT` | `300s` | Maximum duration before timing out response writes; it must cover a whole search |
+| `IDLE_TIMEOUT` | `30s` | How long idle connections are kept open |
+| `STD_LOG_LEVEL` | `info` | Console log level |
+
+Variables in a `.env` file carry no prefix; when they come from the process environment they need the `APP_` prefix, for example `APP_MODEL_API_KEY`.
+
 ## MCP
 
 The MCP endpoint exposes a single tool, `web_search`. It takes `{"query": "..."}` and returns the same shape as `/v1/search`, also as structured output.
@@ -125,37 +149,6 @@ The MCP endpoint exposes a single tool, `web_search`. It takes `{"query": "..."}
 ```
 
 Omit `headers` when `AUTH_TOKEN` is not set.
-
-## Build and Test
-
-```bash
-go build ./...
-go vet ./...
-go test -race ./...
-```
-
-## Container
-
-```bash
-docker build --build-arg BUILD_VERSION="$(git describe --tags --always)" -t deepsearch:local .
-docker run --rm -p 8231:8231 -v "$PWD/.env:/app/.env:ro" deepsearch:local
-```
-
-Compose mounts `.env` and inherits the image health check:
-
-```bash
-docker compose up -d
-```
-
-The image runs as the unprivileged `deepsearch` user and polls `/healthz`. Configuration is a `.env` file mounted at `/app/.env`, and `APP_`-prefixed variables work just as well. The listen port comes from `HTTP_ADDR` in that config, so keep `DEEPSEARCH_PORT` in sync with it — for a `.env` that sets `HTTP_ADDR=0.0.0.0:8232` use `DEEPSEARCH_PORT=8232 docker compose up -d`.
-
-Tagged releases (`v*`) publish `linux/amd64` images to GitHub Container Registry as `ghcr.io/<owner>/deepsearch`, tagged `<version>`, `<major>.<minor>` and `latest`:
-
-```bash
-docker run --rm -p 8231:8231 -v "$PWD/.env:/app/.env:ro" ghcr.io/<owner>/deepsearch:latest
-```
-
-A new GHCR package starts private; make it public in the repository settings when anonymous pulls are wanted.
 
 ## Architecture
 
