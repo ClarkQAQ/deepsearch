@@ -38,6 +38,17 @@ The `Dockerfile` builds from source in two stages: `golang:1.27-alpine` compiles
 
 Two workflows live in `.github/workflows`: `ci.yml` runs gofmt, the `.env.example` drift check (`go generate` + `git diff`), `go mod verify`, build, vet and `go test -race`, plus a build-only container job; `container.yml` publishes `linux/amd64` images to `ghcr.io/${GITHUB_REPOSITORY,,}` (resolved: `ghcr.io/clarkqaq/deepsearch`) on `v*` tags with semver/`latest` tags, provenance and SBOM, and tags manual runs as `edge`. Image names must stay lowercase, and neither workflow needs repository secrets.
 
+## Releasing
+
+Releases are cut from a green `master` and the tag is the only version source:
+
+```bash
+git tag -a v0.1.1 -m "DeepSearch v0.1.1"
+git push origin v0.1.1
+```
+
+Pushing a `v*` tag runs `container.yml`, which publishes `linux/amd64` images to `ghcr.io/clarkqaq/deepsearch` tagged `<version>`, `<major>.<minor>` and `latest`. The tag name becomes `BUILD_VERSION`, so `util.BuildVersion()` reports it over MCP; bump the patch for docs or container-only changes and the minor for new capability. Afterwards confirm the run is green and that all four tags share one digest, then check the package is public if anonymous pulls are expected. No GitHub Release page is created automatically.
+
 ## High-Level Architecture
 
 deepsearch is a small Go (1.27) service that exposes web search over a REST API and an MCP server. It is a trimmed port of the cmua search stack: the Anthropic server-side `web_search` tool runs through the `fantasy` agent framework, and `WebFetch`/`GetTime` are the agent's client tools.
